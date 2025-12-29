@@ -79,7 +79,7 @@ class TheraphyAgent(StateAgent):
         return values
 
     
-    async def _node_summarise(self,state):
+    def _node_summarise(self,state):
         messages_list=state['messages']
         if len(messages_list)==0:
             return {'messages':[]}
@@ -91,7 +91,7 @@ Your goal is to summarise the conversation of the user until this point. Make su
         messages_text = "\n".join([m.content for m in messages_list])
         if not self._llm:
             raise Exception("LLM is not initialized")
-        summary = await self._llm.ainvoke(summarisation_prompt.format(messages=messages_text))
+        summary = self._llm.invoke(summarisation_prompt.format(messages=messages_text))
 
         return {'messages':[summary], 'key_points':[], 'store_memory':False}
     
@@ -113,7 +113,7 @@ The user's designation is {designation}
             
         return prompt
 
-    async def _node_llm(self, state: TheraphyAgentSchema, config: RunnableConfig, store: BaseStore):
+    def _node_llm(self, state: TheraphyAgentSchema, config: RunnableConfig, store: BaseStore):
         
         memory= self._get_memory(state,config, store)
         print(memory)
@@ -122,9 +122,9 @@ The user's designation is {designation}
         prompt= self._get_prompt(state,memory)
         if self._llm:
             self.llm_struct= self._llm.with_structured_output(StructTheraphyAgentSchema)
-        result: StructTheraphyAgentSchema= await self.llm_struct.ainvoke(prompt) #type: ignore
+        result: StructTheraphyAgentSchema= self.llm_struct.invoke(prompt) #type: ignore
         
-        return {'messages': result.message,'key_points': result.key_points ,'store_memory': True}
+        return {'messages': result.message,'key_points': result.key_points ,'store_memory': result.store_memory}
         
 
     def _route_llm(self,state: TheraphyAgentSchema):
