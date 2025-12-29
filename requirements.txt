@@ -7,3 +7,4 @@ langchain-anthropic
 dotenv
 numpy
 pandas 
+langgraph-checkpoint-sqlite

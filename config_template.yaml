@@ -1,0 +1,7 @@
+agents:
+  - name: Agent1
+    model_provider: <enter provider name>
+    model_name: <enter model name>
+    # Make sure to mention API key in your .env file or set it in your environment
+
+  

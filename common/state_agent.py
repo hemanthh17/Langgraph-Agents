@@ -1,17 +1,17 @@
 from langgraph.graph import StateGraph
 from abc import ABCMeta, abstractmethod
-from llm_utils import LLM
+from common.llm_utils import LLM
 from langchain_core.language_models import BaseChatModel
 from typing import Optional
 
 class StateAgent(StateGraph,metaclass=ABCMeta):
-    def __init__(self,state_schema, input_schema=None, output_schema=None, context_schema=None, llm_object=Optional[BaseChatModel],
-                 agent_key=Optional[str]):
+    def __init__(self,state_schema, input_schema=None, output_schema=None, context_schema=None, llm_object: Optional[BaseChatModel]=None,
+                 agent_key: Optional[str]=None):
         self._input_schema=input_schema
         self._output_schema=output_schema
         self._state_schema=state_schema
         self._context_schema=context_schema
-            
+        # Prioritising LLM Object over the cofig key
         if llm_object is not None:
             self._llm=llm_object
         elif agent_key is not None:
