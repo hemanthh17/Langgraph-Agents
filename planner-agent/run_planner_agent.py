@@ -2,12 +2,11 @@ import sys,os
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from therapy_based_agent import TheraphyAgent
+from planning_agent import PlannerAgent
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.store.sqlite import SqliteStore
 from langchain_core.messages import HumanMessage, AIMessage
 import sqlite3
-from argparse import ArgumentParser
 
 def _print_messages(messages):
     for message in messages[::-1]:
@@ -16,21 +15,17 @@ def _print_messages(messages):
             break
 
 def main():
-    parser=ArgumentParser()
-    parser.add_argument('--thread_id',default=1)
-    args=parser.parse_args()
     os.makedirs('scratch/sql_db/',exist_ok=True)
-    check_conn = sqlite3.connect('scratch/sql_db/therapy_langgraph_check.db', check_same_thread=False,isolation_level=None)
-    mem_conn = sqlite3.connect('scratch/sql_db/therapy_langgraph_mem.db', check_same_thread=False,isolation_level=None)
+    check_conn = sqlite3.connect('scratch/sql_db/planner_langgraph_check.db', check_same_thread=False,isolation_level=None)
+    mem_conn = sqlite3.connect('scratch/sql_db/planner_langgraph_check.db', check_same_thread=False,isolation_level=None)
 
     checkpointer= SqliteSaver(check_conn)
     store=SqliteStore(mem_conn)
 
-    graph = TheraphyAgent().compile(checkpointer=checkpointer,store=store)        
+    graph = PlannerAgent().compile(checkpointer=checkpointer,store=store)        
     user_id = input('Enter User ID: ')
-    designation = input('Enter Designation: ')
-    context_schema={'user':user_id, 'designation':designation}
-    cfg={'configurable':{'thread_id':args.thread_id}}
+    context_schema={'user_id':user_id}
+    cfg={'configurable':{'thread_id':5}}
 
     try:
         while True:
@@ -50,3 +45,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

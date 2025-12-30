@@ -8,11 +8,13 @@ from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel, Field
 from typing import List
 from langgraph.runtime import get_runtime
+from langgraph.types import Overwrite
 from typing import Annotated
 from hashlib import sha256
 from uuid import uuid4
 from langgraph.graph import START, END
 from dataclasses import dataclass
+from langchain_core.messages import AIMessage
 
 class TheraphyInputSchema(MessagesState):
     pass
@@ -20,12 +22,12 @@ class TheraphyOutputSchema(MessagesState):
     pass
 
 class TheraphyAgentSchema(MessagesState):
-    key_points: List[str]
+    key_issues: List[str]
     store_memory: bool
 
 
 class StructTheraphyAgentSchema(BaseModel):
-    key_points: Annotated[List[str], Field(description="List of key issues the user mentioned as issues. Also store characterisitcs of the user.")]
+    key_issues: Annotated[List[str], Field(description="List of key issues the user mentioned. Focus on listing only the problems mentioned.")]
     store_memory: Annotated[bool, Field(description="If the information in key points must be stored in memory. Always prefer to do this.")]
     message: Annotated[str, Field(description="response to the user.")]
     
@@ -36,8 +38,8 @@ class TheraphyConfigSchema:
     designation: str
 
 class TheraphyAgent(StateAgent):
-    def __init__(self):
-        super().__init__(state_schema=TheraphyAgentSchema,context_schema=TheraphyConfigSchema,input_schema=TheraphyInputSchema,agent_key='therapy_based_agent')
+    def __init__(self,llm_object=None,agent_key="therapy_based_agent"):
+        super().__init__(state_schema=TheraphyAgentSchema,context_schema=TheraphyConfigSchema,input_schema=TheraphyInputSchema,output_schema=TheraphyOutputSchema,llm_object=llm_object,agent_key=agent_key)
 
     def _construct_agent(self):
         self.add_node("llm_node",self._node_llm)
@@ -58,15 +60,15 @@ class TheraphyAgent(StateAgent):
     def _node_store_memory(self, state: TheraphyAgentSchema, config: RunnableConfig, store: BaseStore):
         if state['store_memory']:
             print('Storing in memory...')
-            key_points_list = state.get("key_points")
+            key_points_list = state.get("key_issues")
             user= get_runtime(TheraphyConfigSchema).context.user
             
             user_hash=self._get_user_hash(user)
 
-            store.put((user_hash,"key_memory"),str(uuid4()),{'key_points':key_points_list})
+            store.put((user_hash,"key_memory"),str(uuid4()),{'key_issues':key_points_list})
 
 
-    def _get_memory(self, state: TheraphyAgentSchema, config: RunnableConfig, store: BaseStore):
+    def _get_memory(self, state: TheraphyAgentSchema, store: BaseStore):
         user= get_runtime(TheraphyConfigSchema).context.user
         
         user_hash=self._get_user_hash(user)
@@ -75,7 +77,7 @@ class TheraphyAgent(StateAgent):
         values=[]
         for mem in memories:
             mem_dict= mem.dict()
-            values.append(mem_dict['value']['key_points'])
+            values.append(mem_dict['value']['key_issues'])
         return values
 
     
@@ -93,7 +95,7 @@ Your goal is to summarise the conversation of the user until this point. Make su
             raise Exception("LLM is not initialized")
         summary = self._llm.invoke(summarisation_prompt.format(messages=messages_text))
 
-        return {'messages':[summary], 'key_points':[], 'store_memory':False}
+        return {'messages':Overwrite(AIMessage(content=str(summary))), 'key_issues':[], 'store_memory':False}
     
     def _get_prompt(self, state: TheraphyAgentSchema, memory=None):
 
@@ -105,9 +107,12 @@ The user query is mentioned below:
 
 The user's designation is {designation}
 
+Make sure to use the user name while replying. The user name is {user_name}
+
 """
         designation=get_runtime(TheraphyConfigSchema).context.designation
-        prompt=prompt.format(query=state['messages'][-1].content,designation=designation)
+        user_name=get_runtime(TheraphyConfigSchema).context.user
+        prompt=prompt.format(query=state['messages'][-1].content,designation=designation,user_name=user_name)
         if memory:
             prompt+=f"The past interaction from the user had the following key points. Make sure you talk to the user on the basis of these items.\n{memory} "
             
@@ -115,21 +120,17 @@ The user's designation is {designation}
 
     def _node_llm(self, state: TheraphyAgentSchema, config: RunnableConfig, store: BaseStore):
         
-        memory= self._get_memory(state,config, store)
-        print(memory)
-
-        
+        memory= self._get_memory(state,store)
         prompt= self._get_prompt(state,memory)
         if self._llm:
             self.llm_struct= self._llm.with_structured_output(StructTheraphyAgentSchema)
         result: StructTheraphyAgentSchema= self.llm_struct.invoke(prompt) #type: ignore
         
-        return {'messages': result.message,'key_points': result.key_points ,'store_memory': result.store_memory}
+        return {'messages': [AIMessage(result.message)],'key_issues': result.key_issues ,'store_memory': result.store_memory}
         
-
     def _route_llm(self,state: TheraphyAgentSchema):
         if state.get('store_memory', False):
             return "store_memory"
-        if len(state['messages']) > 5:
+        if len(state['messages']) > 10:
             return "summary"
         return END

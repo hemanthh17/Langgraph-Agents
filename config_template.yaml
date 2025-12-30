@@ -1,6 +1,6 @@
 agents:
-  - name: Agent1
-    model_provider: <enter provider name>
+  - name: <agent-name>
+    model_provider: <enter provider name> <ollama/openai/anthropic>
     model_name: <enter model name>
     # Make sure to mention API key in your .env file or set it in your environment
 
